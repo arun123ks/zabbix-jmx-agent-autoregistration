@@ -1,0 +1,69 @@
+#!/bin/bash
+logf="/tmp/zab.log"
+touch /tmp/zab.log
+#ERROR='0'
+ZABBIX_USER='Admin' #Make user with API access and put name here
+ZABBIX_PASS='ytryetextr' #Make user with API access and put password here
+API='https://192.168.1.2/zabbix/api_jsonrpc.php'
+
+echo "Going to run" >> $logf
+sleep 60
+# Authenticate with Zabbix API
+authenticate() { 
+                    curl -k -i -s -X POST -H 'Content-Type: application/json-rpc' -d "{\"params\": {\"password\": \"$ZABBIX_PASS\", \"user\": \"$ZABBIX_USER\"}, \"jsonrpc\":\"2.0\", \"method\": \"user.login\",  \"id\": 1}" $API  | tail -n 1 | cut -c 28-59
+		}
+
+         AUTH_TOKEN=$(authenticate) >> $logf
+
+
+
+ hostlst=(`mysql --defaults-extra-file=/var/lib/zabbix/.my.cnf -e "select hostid from zabbix.hosts where hostid in (select hostid from zabbix.hosts_groups where groupid ='32') and jmx_available =0;\ " |    	awk {'print $1'}  | grep -v "hostid"`) \
+artck=${#hostlst[@]}
+echo $artck
+artc=$((artck-1))
+for (( x = 0 ; x <= $artc ; x++));
+do
+		hin=`mysql --defaults-extra-file=/var/lib/zabbix/.my.cnf  -e "select name from zabbix.hosts where hostid='${hostlst[x]}';"| grep -v name |  awk {'print $1'}`
+	        hit=`mysql  --defaults-extra-file=/var/lib/zabbix/.my.cnf  -e "select ip from zabbix.interface where hostid='${hostlst[x]}' and type =1 ;" | grep -v ip | awk {'print $1'}`
+		echo $hin >> $logf
+	        echo $hit  >> $logf
+	        echo "${hostlst[x]}" >> $logf
+
+# Authenticate with Zabbix API
+#authenticate() { 
+#	            curl -k -i -s -X POST -H 'Content-Type: application/json-rpc' -d "{\"params\": {\"password\": \"$ZABBIX_PASS\", \"user\": \"$ZABBIX_USER\"}, \"jsonrpc\":\"2.0\", \"method\": \"user.login\",  \"id\": 1}" $API  | tail -n 1 | cut -c 28-59 
+#	    } 
+
+
+#	    AUTH_TOKEN=$(authenticate) >> $logf
+
+	    hino() {
+		     	curl -k -s -i -X POST -H 'Content-Type: application/json-rpc' -d "{\"jsonrpc\":\"2.0\",\"method\":\"host.get\",\"params\":{\"output\":\"hostid\",\"filter\":{\"name\":[\"$hin\"]}},\"auth\":\"$AUTH_TOKEN\",\"id\":1}" $API | tail -n 1 | cut -c 30-44 | cut -d ":" -f 2 | tr -d '" '
+		}
+
+
+		hid=$(hino) >> $logf
+
+
+
+
+
+		create_jmxin() {
+			            curl -k -s -i -X POST -H 'Content-Type: application/json-rpc' -d "{\"jsonrpc\":\"2.0\",\"method\":\"hostinterface.create\",\"params\":{\"hostid\":\"$hid\",\"dns\":\"$hin\",\"ip\":\"$hit\",\"main\":1,\"port\":9795,\"useip\":1,\"type\":4},\"auth\":\"$AUTH_TOKEN\",\"id\":1}" $API
+			    }
+
+			    output=$(create_jmxin)
+
+
+			    echo $output >> $logf
+
+  link_temp() {
+                     curl -k -s -i -X POST -H 'Content-Type: application/json-rpc' -d "{\"jsonrpc\":\"2.0\",\"method\":\"host.update\",\"params\":{\"hostid\":\"$hid\",\"templates\":[{\"templateid\":\"10168\"},{\"templateid\":\"11284\"},{\"templateid\":\"11334\"},{\"templateid\":\"11393\"},{\"templateid\":\"10201\"},{\"templateid\":\"11614\"},{\"templateid\":\"11714\"},{\"templateid\":\"10694\"}]},\"auth\":\"$AUTH_TOKEN\",\"id\":1}" $API
+                 }
+     output2=$(link_temp)
+
+              echo $output2 >> $logf
+
+
+
+done	
